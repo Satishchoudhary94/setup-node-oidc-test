@@ -1,0 +1,26 @@
+{
+  "name": "@Satishchoudhary94/setup-node-oidc-test",
+  "version": "1.0.0",
+  "description": "Demonstrates the actions/setup-node OIDC authentication issue (PR #1477)",
+  "main": "index.js",
+  "scripts": {
+    "test": "node -e \"const { hello } = require('.'); console.log(hello('OIDC test')); process.exit(0);\""
+  },
+  "keywords": [
+    "github-actions",
+    "setup-node",
+    "oidc",
+    "npm",
+    "authentication"
+  ],
+  "author": "Satishchoudhary94",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Satishchoudhary94/setup-node-oidc-test.git"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  }
+}

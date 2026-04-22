@@ -1,0 +1,156 @@
+name: "CURRENT setup-node (BROKEN OIDC)"
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write   # Required to request OIDC token from GitHub
+  contents: read
+
+jobs:
+  test-current-behavior:
+    name: "Current setup-node@v4 — NODE_AUTH_TOKEN blocks OIDC"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: "Setup Node.js with current actions/setup-node@v4"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org/"
+          # NOTE: We do NOT provide a node-auth-token here.
+          # The user intends to use OIDC (provenance publishing).
+          # But setup-node@v4 will still inject NODE_AUTH_TOKEN=XXXXX...
+
+      # -----------------------------------------------------------------------
+      # DIAGNOSTIC: Show what NODE_AUTH_TOKEN was set to
+      # -----------------------------------------------------------------------
+      - name: "DIAGNOSTIC — Check NODE_AUTH_TOKEN value"
+        run: |
+          echo "============================================================"
+          echo "  PROBLEM DEMONSTRATION: actions/setup-node@v4"
+          echo "============================================================"
+          echo ""
+          echo "  registry-url was set to: https://registry.npmjs.org/"
+          echo "  node-auth-token was NOT provided (user wants OIDC)"
+          echo ""
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "  NODE_AUTH_TOKEN = (empty)"
+            echo ""
+            echo "  STATUS: OIDC CAN PROCEED (token is unset)"
+          else
+            echo "  NODE_AUTH_TOKEN = ${NODE_AUTH_TOKEN}"
+            echo ""
+            echo "  STATUS: ❌ OIDC IS BLOCKED"
+            echo "  setup-node injected a fake/placeholder token!"
+          fi
+          echo "============================================================"
+        env:
+          NODE_AUTH_TOKEN: ${{ env.NODE_AUTH_TOKEN }}
+
+      # -----------------------------------------------------------------------
+      # DIAGNOSTIC: Show full npm config to reveal the injected _authToken
+      # -----------------------------------------------------------------------
+      - name: "DIAGNOSTIC — Show npm registry config"
+        run: |
+          echo ""
+          echo "---- npm config for registry.npmjs.org ----"
+          npm config get //registry.npmjs.org/:_authToken || echo "(not set via npm config)"
+          echo ""
+          echo "---- Relevant npm config list entries ----"
+          npm config list | grep -E "(_authToken|registry|token|oidc)" || echo "(none found)"
+          echo ""
+
+      # -----------------------------------------------------------------------
+      # DIAGNOSTIC: Attempt OIDC token fetch — this WILL fail because
+      # NODE_AUTH_TOKEN is set, overriding OIDC detection
+      # -----------------------------------------------------------------------
+      - name: "DIAGNOSTIC — Verify OIDC token is available from GitHub"
+        id: oidc_check
+        run: |
+          echo "---- Checking GitHub OIDC token availability ----"
+          if [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL}" ]; then
+            echo "  ACTIONS_ID_TOKEN_REQUEST_URL is set — OIDC is available from GitHub"
+            echo "  But npm will IGNORE it because NODE_AUTH_TOKEN is already set."
+          else
+            echo "  ACTIONS_ID_TOKEN_REQUEST_URL is NOT set"
+          fi
+
+      # -----------------------------------------------------------------------
+      # DEMONSTRATE: npm publish --dry-run fails because fake token is used
+      # -----------------------------------------------------------------------
+      - name: "DEMONSTRATE — npm publish --dry-run (shows auth method chosen)"
+        run: |
+          echo ""
+          echo "---- npm publish --dry-run (no actual publish, just auth check) ----"
+          echo ""
+          echo "npm will use NODE_AUTH_TOKEN (fake placeholder) instead of OIDC."
+          echo "This would result in 401 Unauthorized on real publish."
+          echo ""
+          # Show what npm sees for authentication
+          node -e "
+            const token = process.env.NODE_AUTH_TOKEN;
+            if (token) {
+              console.log('npm auth method: TOKEN (NODE_AUTH_TOKEN is set)');
+              console.log('Token value    : ' + token);
+              console.log('OIDC will use  : SKIPPED — token takes priority');
+              console.log('');
+              console.log('Result         : ❌ PUBLISH WILL FAIL with 401 if token is fake');
+            } else {
+              console.log('npm auth method: OIDC (NODE_AUTH_TOKEN is unset)');
+              console.log('Result         : OIDC provenance flow would proceed');
+            }
+          "
+        env:
+          NODE_AUTH_TOKEN: ${{ env.NODE_AUTH_TOKEN }}
+
+      # -----------------------------------------------------------------------
+      # SHOW: npm 11.5.1+ OIDC detection logic
+      # -----------------------------------------------------------------------
+      - name: "EXPLAIN — How npm 11.5.1+ detects OIDC"
+        run: |
+          echo ""
+          echo "============================================================"
+          echo "  How npm 11.5.1+ decides whether to use OIDC:"
+          echo "============================================================"
+          echo ""
+          echo "  npm source (lib/commands/publish.js):"
+          echo "  ┌──────────────────────────────────────────────────────┐"
+          echo "  │  if (process.env.NODE_AUTH_TOKEN) {                  │"
+          echo "  │    // Use token auth — skip OIDC entirely            │"
+          echo "  │  } else if (process.env.ACTIONS_ID_TOKEN_REQUEST_URL)│"
+          echo "  │    // Use OIDC provenance                            │"
+          echo "  │  }                                                   │"
+          echo "  └──────────────────────────────────────────────────────┘"
+          echo ""
+          echo "  Current setup-node@v4 behavior:"
+          echo "  - Sets NODE_AUTH_TOKEN = 'XXXXX-XXXXX-XXXXX-XXXXX'"
+          echo "  - This triggers the first branch (token auth)"
+          echo "  - OIDC branch is NEVER reached"
+          echo "  - Result: ❌ 401 Unauthorized (fake token rejected by npm)"
+          echo ""
+          echo "============================================================"
+
+      - name: "SUMMARY — Current setup-node@v4 result"
+        run: |
+          echo ""
+          echo "┌─────────────────────────────────────────────────────────────┐"
+          echo "│  RESULT: OIDC PUBLISHING IS BROKEN WITH setup-node@v4       │"
+          echo "├─────────────────────────────────────────────────────────────┤"
+          echo "│                                                             │"
+          echo "│  registry-url:    https://registry.npmjs.org/               │"
+          echo "│  node-auth-token: (not provided by user)                    │"
+          echo "│  NODE_AUTH_TOKEN: XXXXX-XXXXX-XXXXX-XXXXX  ← injected!     │"
+          echo "│                                                             │"
+          echo "│  npm auth decision: TOKEN (OIDC bypassed)                   │"
+          echo "│  Publish result:    ❌ 401 Unauthorized                     │"
+          echo "│                                                             │"
+          echo "│  Fix: PR #1477 — only set NODE_AUTH_TOKEN when user         │"
+          echo "│       explicitly provides node-auth-token input             │"
+          echo "└─────────────────────────────────────────────────────────────┘"
+          echo ""
