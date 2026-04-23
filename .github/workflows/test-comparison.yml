@@ -81,6 +81,21 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ env.NODE_AUTH_TOKEN }}
 
+      - name: "RESULT — npm publish --provenance --access public --dry-run"
+        continue-on-error: true
+        run: |
+          echo ""
+          echo "---- npm publish --provenance --access public --dry-run ----"
+          echo ""
+          echo "NODE_AUTH_TOKEN is: ${NODE_AUTH_TOKEN:-<empty>}"
+          echo "Expected: auth failure because NODE_AUTH_TOKEN is set to fake value."
+          echo ""
+          npm publish --provenance --access public --dry-run 2>&1 || true
+          echo ""
+          echo "---- Publish attempt complete ----"
+        env:
+          NODE_AUTH_TOKEN: ${{ env.NODE_AUTH_TOKEN }}
+
       - name: "RESULT — Reproduction proof"
         run: |
           echo ""
@@ -88,10 +103,10 @@ jobs:
           echo "  even when node-auth-token input is NOT provided."
           echo ""
           echo "  npm source check for OIDC (simplified):"
-          echo "    if (NODE_AUTH_TOKEN)          ← TRUE (injected fake value)"
-          echo "      use token auth              ← this branch runs"
-          echo "    else if (OIDC_REQUEST_URL)    ← never reached"
-          echo "      use OIDC                    ← OIDC never used"
+          echo "    if (NODE_AUTH_TOKEN)          <- TRUE (injected fake value)"
+          echo "      use token auth              <- this branch runs"
+          echo "    else if (OIDC_REQUEST_URL)    <- never reached"
+          echo "      use OIDC                    <- OIDC never used"
           echo ""
           echo "  Published with provenance: NOT POSSIBLE with current setup-node"
           echo ""
@@ -156,6 +171,21 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ env.NODE_AUTH_TOKEN }}
 
+      - name: "RESULT — npm publish --provenance --access public --dry-run"
+        continue-on-error: true
+        run: |
+          echo ""
+          echo "---- npm publish --provenance --access public --dry-run ----"
+          echo ""
+          echo "NODE_AUTH_TOKEN is: ${NODE_AUTH_TOKEN:-<empty — OIDC path taken>}"
+          echo "Expected: OIDC token fetched from GitHub, provenance flow proceeds."
+          echo ""
+          npm publish --provenance --access public --dry-run 2>&1 || true
+          echo ""
+          echo "---- Publish attempt complete ----"
+        env:
+          NODE_AUTH_TOKEN: ${{ env.NODE_AUTH_TOKEN }}
+
       - name: "RESULT — Backward compatibility check"
         run: |
           echo ""
@@ -163,7 +193,7 @@ jobs:
           echo "  the fix still sets NODE_AUTH_TOKEN correctly."
           echo ""
           echo "  Example: with node-auth-token: \${{ secrets.NPM_TOKEN }}"
-          echo "    NODE_AUTH_TOKEN = <user-provided-token>  ← still works"
+          echo "    NODE_AUTH_TOKEN = <user-provided-token>  <- still works"
           echo "    Token auth      = used as before"
           echo "    Existing users  = completely unaffected"
           echo ""

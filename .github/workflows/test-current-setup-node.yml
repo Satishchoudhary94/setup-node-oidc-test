@@ -82,30 +82,23 @@ jobs:
           fi
 
       # -----------------------------------------------------------------------
-      # DEMONSTRATE: npm publish --dry-run fails because fake token is used
+      # DEMONSTRATE: npm publish --dry-run — shows auth method and failure mode
+      # continue-on-error so the workflow keeps running even when auth fails
       # -----------------------------------------------------------------------
-      - name: "DEMONSTRATE — npm publish --dry-run (shows auth method chosen)"
+      - name: "DEMONSTRATE — npm publish --provenance --access public --dry-run"
+        continue-on-error: true
         run: |
           echo ""
-          echo "---- npm publish --dry-run (no actual publish, just auth check) ----"
+          echo "---- npm publish --provenance --access public --dry-run ----"
           echo ""
-          echo "npm will use NODE_AUTH_TOKEN (fake placeholder) instead of OIDC."
-          echo "This would result in 401 Unauthorized on real publish."
+          echo "NODE_AUTH_TOKEN is set to: ${NODE_AUTH_TOKEN:-<empty>}"
+          echo "npm will pick TOKEN auth (fake placeholder) and reject it."
           echo ""
-          # Show what npm sees for authentication
-          node -e "
-            const token = process.env.NODE_AUTH_TOKEN;
-            if (token) {
-              console.log('npm auth method: TOKEN (NODE_AUTH_TOKEN is set)');
-              console.log('Token value    : ' + token);
-              console.log('OIDC will use  : SKIPPED — token takes priority');
-              console.log('');
-              console.log('Result         : ❌ PUBLISH WILL FAIL with 401 if token is fake');
-            } else {
-              console.log('npm auth method: OIDC (NODE_AUTH_TOKEN is unset)');
-              console.log('Result         : OIDC provenance flow would proceed');
-            }
-          "
+          npm publish --provenance --access public --dry-run 2>&1 || true
+          echo ""
+          echo "---- Publish attempt complete ----"
+          echo "Expected: 401 Unauthorized or OIDC exchange error because"
+          echo "NODE_AUTH_TOKEN overrides the OIDC path."
         env:
           NODE_AUTH_TOKEN: ${{ env.NODE_AUTH_TOKEN }}
 
